@@ -3,9 +3,8 @@
 import { useState } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { db } from '../../../lib/firebase';
-import { collection, addDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, writeBatch } from 'firebase/firestore'; // Adicionada a importação 'doc'
 import { BotIcon, SparklesIcon } from '../../components/icons';
-import Link from 'next/link';
 
 export default function PlannerPage() {
     const { user } = useAuth();
@@ -20,7 +19,8 @@ export default function PlannerPage() {
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, value }));
+        // Corrige a forma como o estado é atualizado
+        setFormData(prev => ({ ...prev, [name]: value }));
     };
 
     const generateWorkoutPlan = async () => {
@@ -61,7 +61,8 @@ export default function PlannerPage() {
             let chatHistory = [];
             chatHistory.push({ role: "user", parts: [{ text: prompt }] });
             const payload = { contents: chatHistory };
-            const apiKey = "" // API Key é gerenciada pelo ambiente
+            // AJUSTE: Lê a chave da API do arquivo .env.local
+            const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
 
             const response = await fetch(apiUrl, {
@@ -70,15 +71,16 @@ export default function PlannerPage() {
                 body: JSON.stringify(payload)
             });
 
+            // Lógica de erro aprimorada
             if (!response.ok) {
-                throw new Error(`API error: ${response.statusText}`);
+                const errorData = await response.json().catch(() => null); // Tenta pegar mais detalhes do erro
+                const errorMessage = errorData?.error?.message || `Erro da API: ${response.status} ${response.statusText}`;
+                throw new Error(errorMessage);
             }
 
             const result = await response.json();
             
-            if (result.candidates && result.candidates.length > 0 &&
-                result.candidates[0].content && result.candidates[0].content.parts &&
-                result.candidates[0].content.parts.length > 0) {
+            if (result.candidates && result.candidates[0]?.content?.parts?.[0]) {
               const text = result.candidates[0].content.parts[0].text;
               const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
               const parsedPlan = JSON.parse(cleanedText);
@@ -89,7 +91,8 @@ export default function PlannerPage() {
 
         } catch (err) {
             console.error("Erro ao gerar plano:", err);
-            setError("Não foi possível gerar o plano. Tente novamente.");
+            // Mostra a mensagem de erro mais detalhada para o usuário
+            setError(err.message || "Não foi possível gerar o plano. Tente novamente.");
         } finally {
             setIsLoading(false);
         }
@@ -140,10 +143,33 @@ export default function PlannerPage() {
             </div>
 
             <div className="bg-gray-800 rounded-2xl p-6">
-                {/* Formulário */}
+                {/* Formulário Completo */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                    {/* Opções de Objetivo, Nível e Dias */}
-                    {/* ... (código do formulário aqui) ... */}
+                    <div>
+                        <label htmlFor="objective" className="block text-sm font-medium text-gray-300 mb-2">Qual seu principal objetivo?</label>
+                        <select name="objective" id="objective" value={formData.objective} onChange={handleInputChange} className="w-full bg-gray-700 text-white rounded-lg p-3 border-0 focus:ring-2 focus:ring-cyan-500">
+                            <option value="hypertrophy">Hipertrofia</option>
+                            <option value="strength">Força</option>
+                            <option value="endurance">Resistência</option>
+                        </select>
+                    </div>
+                     <div>
+                        <label htmlFor="level" className="block text-sm font-medium text-gray-300 mb-2">Qual seu nível de experiência?</label>
+                        <select name="level" id="level" value={formData.level} onChange={handleInputChange} className="w-full bg-gray-700 text-white rounded-lg p-3 border-0 focus:ring-2 focus:ring-cyan-500">
+                            <option value="beginner">Iniciante</option>
+                            <option value="intermediate">Intermediário</option>
+                            <option value="advanced">Avançado</option>
+                        </select>
+                    </div>
+                     <div>
+                        <label htmlFor="days" className="block text-sm font-medium text-gray-300 mb-2">Quantos dias por semana?</label>
+                        <select name="days" id="days" value={formData.days} onChange={handleInputChange} className="w-full bg-gray-700 text-white rounded-lg p-3 border-0 focus:ring-2 focus:ring-cyan-500">
+                            <option value="2">2 dias</option>
+                            <option value="3">3 dias</option>
+                            <option value="4">4 dias</option>
+                            <option value="5">5 dias</option>
+                        </select>
+                    </div>
                 </div>
                 <button onClick={generateWorkoutPlan} disabled={isLoading} className="w-full flex justify-center items-center bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300 disabled:bg-cyan-800">
                     <SparklesIcon />
